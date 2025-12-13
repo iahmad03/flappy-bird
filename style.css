@@ -1,3 +1,10 @@
+@font-face {
+	font-family: 'MyFont';
+	src: url('assets/fonts/AntonSC-Regular.ttf') format('truetype');
+	font-weight: normal;
+	font-style: normal;
+}
+
 html,
 body {
 	margin: 0;
@@ -15,7 +22,6 @@ body {
 	background-position: center;
 	background-repeat: no-repeat;
 	background-attachment: fixed;
-	opacity: 1;
 	position: relative;
 }
 

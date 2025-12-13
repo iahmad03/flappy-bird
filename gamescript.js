@@ -2,8 +2,13 @@ let canvas, ctx;
 let canvas_width = 400;
 let canvas_height = 600;
 
+const font = new FontFace('AntonSC', 'url(assets/fonts/AntonSC-Regular.ttf)');
 const bg = new Image();
+const pipe_top = new Image();
+const pipe_bottom = new Image();
 bg.src = "assets/images/background.png";
+pipe_top.src = "assets/images/pipe-top.png";
+pipe_bottom.src = "assets/images/pipe-bottom.png";
 
 let player_x = 100;
 let player_y = 280;
@@ -14,7 +19,7 @@ let gravity = 950;
 
 let pipes = [];
 const pipe_width = 80;
-const pipe_gap = 200;
+const pipe_gap = 180;
 const pipe_speed = 180;
 const pipe_interval = 1.8;
 let pipeTimer = 0;
@@ -36,9 +41,9 @@ const GameState = {
 };
 
 const playButton = {
-    x: canvas_width / 2 - 80,
+    x: canvas_width / 2 - 90,
     y: canvas_height / 2 + 40,
-    width: 160,
+    width: 180,
     height: 50
 };
 
@@ -67,8 +72,11 @@ window.onload = function() {
         }
     });
 
-    lastTime = performance.now();
-    requestAnimationFrame(gameLoop);
+    font.load().then(function(loadedFont) {
+        document.fonts.add(loadedFont);
+        lastTime = performance.now();
+        requestAnimationFrame(gameLoop);
+    });
 }
 
 function handleInput(e) {
@@ -172,30 +180,44 @@ function drawPlayer() {
 
 
 function drawPipes() {
-    ctx.fillStyle = "black";
     pipes.forEach(pipe => {
-        ctx.fillRect(pipe.x, pipe.y, pipe.width, pipe.height);
-        ctx.fillRect(pipe.x, pipe.bottomY, pipe.width, pipe.bottomHeight);
+        ctx.drawImage(
+            pipe_top,
+            pipe.x,
+            pipe.height - pipe_top.height,
+            pipe.width,
+            pipe_top.height
+        );
+
+        ctx.drawImage(
+            pipe_bottom,
+            pipe.x,
+            pipe.bottomY,
+            pipe.width,
+            pipe_bottom.height
+        );
     });
 }
 
 
 function drawScore() {
-    ctx.font = "bold 40px Lato";
+    ctx.font = "bold 40px AntonSC";
     ctx.textAlign = "center";
     ctx.textBaseline = "top";
-    ctx.lineWidth = 2; 
-    ctx.strokeStyle = "white";
-    ctx.strokeText(score, canvas.width / 2, 10);
+    ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
+    ctx.fillText(score, canvas.width / 2, 15);
 }
 
 
 function drawStartText() {
-    ctx.fillStyle = "white";
-    ctx.font = "bold 32px Lato";
+    ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
+    ctx.font = "bold 50px AntonSC";
     ctx.textAlign = "center";
     ctx.fillText("TAP", canvas.width / 1.8, canvas.height / 1.8);
-    ctx.font = "50px Lato";
+    
+    ctx.fillStyle = "white";
+    ctx.font = "60px AntonSC";
+    ctx.textAlign = "center";
     ctx.fillText("👆 ", canvas.width / 2.2, canvas.height / 1.6);
 }
 
@@ -204,30 +226,34 @@ function drawGameOver() {
     ctx.fillStyle = "rgba(0, 0, 0, 0.2)";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    ctx.font = "bold 50px Lato";
-    ctx.fillStyle = "white";
+    ctx.font = "bold 70px AntonSC";
     ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
     ctx.fillText("GAME OVER", canvas.width / 2, canvas.height / 2.2 - 20);
 }
 
 
 function drawPlayButton() {
     ctx.fillStyle = "white";
-    ctx.fillRect(
-        playButton.x,
-        playButton.y,
-        playButton.width,
-        playButton.height
+    ctx.beginPath();
+    ctx.roundRect(
+        playButton.x, 
+        playButton.y, 
+        playButton.width, 
+        playButton.height, 
+        4
     );
+    ctx.fill();
 
     ctx.fillStyle = "black";
-    ctx.font = "bold 24px Lato";
+    ctx.font = "24px AntonSC";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillText(
-        "PLAY",
+        "PLAY AGAIN 🔁",
         playButton.x + playButton.width / 2,
-        playButton.y + playButton.height / 2
+        playButton.y + playButton.height / 2 + 4
     );
 }
 
