@@ -1,19 +1,12 @@
-@font-face {
-	font-family: 'MyFont';
-	src: url('assets/fonts/AntonSC-Regular.ttf') format('truetype');
-	font-weight: normal;
-	font-style: normal;
-}
-
 html,
 body {
 	margin: 0;
+	padding: 0;
+	width: 100%;
 	height: 100%;
+	overflow: hidden;
 	touch-action: none;
 	overscroll-behavior: none;
-}
-
-body {
 	display: flex;
 	justify-content: center;
 	align-items: center;
@@ -22,12 +15,23 @@ body {
 	background-position: center;
 	background-repeat: no-repeat;
 	background-attachment: fixed;
-	position: relative;
 }
 
 #game-wrapper {
+	width: 100%;
+	max-width: 600px;
+	padding: env(safe-area-inset);
 	overflow: hidden;
-	z-index: 1;
 	position: relative;
+	aspect-ratio: 3/4;
+	z-index: 1;
 	border-radius: 8px;
+}
+
+canvas {
+	width: 100%;
+	height: 100%;
+	display: block;
+	touch-action: manipulation;
+	image-rendering: auto;
 }

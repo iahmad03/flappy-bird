@@ -1,63 +1,104 @@
+// ============================================
+// CANVAS & CONTEXT
+// ============================================
 let canvas, ctx;
-let canvas_width = 600;
-let canvas_height = 800;
+const CANVAS_WIDTH = 600;
+const CANVAS_HEIGHT = 800;
 
+// ============================================
+// ASSETS
+// ============================================
 const font = new FontFace('AntonSC', 'url(assets/fonts/AntonSC-Regular.ttf)');
-const bg = new Image();
-const ground = new Image();
-const pointer = new Image();
-const player_img = new Image();
-const pipe_top = new Image();
-const pipe_bottom = new Image();
-bg.src = "assets/images/background.png";
-ground.src = "assets/images/ground.png";
-pointer.src = "assets/images/pointer.png";
-player_img.src = "assets/images/player.png";
-pipe_top.src = "assets/images/pipe-top.png";
-pipe_bottom.src = "assets/images/pipe-bottom.png";
+let bg, ground, playerImg, pipeTop, pipeBottom, pointer;
 
-let player_x = 100;
-let player_y = 280;
-let player_width = 64;
-let player_height = 44;
-let velocity = 0;
-let gravity = 950;
-
-let pipes = [];
-const pipe_width = 100;
-const pipe_gap = 180;
-const pipe_speed = 180;
-const pipe_interval = 1.8;
-let pipeTimer = 0;
+// ============================================
+// PLAYER
+// ============================================
+const PLAYER_X = 100;
+const PLAYER_Y = 280;
+const PLAYER_WIDTH = 64;
+const PLAYER_HEIGHT = 44;
 
 let player = {
-    x: player_x,
-    y: player_y,
-    width: player_width,
-    height: player_height
+    x: PLAYER_X,
+    y: PLAYER_Y,
+    width: PLAYER_WIDTH,
+    height: PLAYER_HEIGHT
 }
 
-let canFlap = true;
-let lastTime = 0;
-let score = 0;
+let velocity = 0;
+let GRAVITY = 950;
 
-const ground_height = 80;
-const ground_y = canvas_height - ground_height;
-let ground_x = 0;
-let ground_speed = pipe_speed;
+// ============================================
+// PIPES
+// ============================================
+let pipes = [];
+const PIPE_WIDTH = 110;
+const PIPE_GAP = 180;
+const PIPE_SPEED = 180;
+const PIPE_INTERVAL = 2;
+let pipeTimer = 0;
 
-const GameState = {
+// ============================================
+// GROUND
+// ============================================
+const GROUND_HEIGHT = 80;
+const GROUND_Y = CANVAS_HEIGHT - GROUND_HEIGHT;
+let groundX = 0;
+let groundSpeed = PIPE_SPEED;
+
+// ============================================
+// GAME STATE
+// ============================================
+const GAME_STATE = {
     START: "start",
     PLAYING: "playing",
     GAME_OVER: "game_over"
 };
 
-let gameState = GameState.START;
+let gameState = GAME_STATE.START;
+let score = 0;
 
-window.onload = function() {
-    canvas = document.getElementById("gameCanvas");
-    canvas.width = canvas_width;
-    canvas.height = canvas_height;
+// ============================================
+// INPUT
+// ============================================
+let canFlap = true;
+let inputLocked = false;
+let lastTime = 0;
+
+
+function loadImage(src) {
+    return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.src = src;
+        img.onload = () => resolve(img);
+        img.onerror = reject;
+    });
+}
+
+
+async function preloadImages() {
+    const sources = {
+        bg: "assets/images/background.png",
+        ground: "assets/images/ground.png",
+        player: "assets/images/player.png",
+        pipe_top: "assets/images/pipe-top.png",
+        pipe_bottom: "assets/images/pipe-bottom.png",
+        pointer: "assets/images/pointer.png"
+    };
+
+    const entries = Object.entries(sources);
+    const loadedEntries = await Promise.all(
+        entries.map(([key, src]) => loadImage(src).then(img => [key, img]))
+    );
+
+    return Object.fromEntries(loadedEntries);
+}
+
+window.onload = async function() {
+    canvas = document.getElementById("game-canvas");
+    canvas.width = CANVAS_WIDTH;
+    canvas.height = CANVAS_HEIGHT;
     ctx = canvas.getContext("2d");
 
     canvas.addEventListener("contextmenu", e => e.preventDefault());
@@ -84,25 +125,38 @@ window.onload = function() {
         }
     });
 
-    font.load().then(function(loadedFont) {
-        document.fonts.add(loadedFont);
-        lastTime = performance.now();
-        requestAnimationFrame(gameLoop);
-    });
+    const images = await preloadImages();
+    bg = images.bg;
+    ground = images.ground;
+    playerImg = images.player;
+    pipeTop = images.pipe_top;
+    pipeBottom = images.pipe_bottom;
+    pointer = images.pointer;
+
+    await font.load();
+    document.fonts.add(font);
+
+    inputLocked = false;
+    lastTime = performance.now();
+    requestAnimationFrame(gameLoop);
 }
 
 function handleInput(source) {
-    if (gameState === GameState.START) {
+    if (inputLocked) return;
+
+    if (gameState === GAME_STATE.START) {
+        inputLocked = true;
         startGame();
         return;
     }
 
-    if (gameState === GameState.GAME_OVER) {
+    if (gameState === GAME_STATE.GAME_OVER) {
+        inputLocked = true;
         resetGame();
         return;
     }
 
-    if (gameState === GameState.PLAYING) {
+    if (gameState === GAME_STATE.PLAYING) {
         if (source === "keyboard") {
             if (!canFlap) return;
             canFlap = false;
@@ -114,7 +168,9 @@ function handleInput(source) {
 
 
 function gameLoop(timestamp) {
-    const delta = (timestamp - lastTime)/1000;
+    inputLocked = false;
+
+    const delta = Math.min((timestamp - lastTime) / 1000, 0.033);
     lastTime = timestamp;
 
     update(delta);
@@ -125,26 +181,26 @@ function gameLoop(timestamp) {
 
 
 function update(delta) {
-    if (gameState !== GameState.GAME_OVER) {
-        ground_x -= ground_speed * delta;
-        if (ground_x <= -canvas_width) {
-            ground_x = 0;
+    if (gameState !== GAME_STATE.GAME_OVER) {
+        groundX -= groundSpeed * delta;
+        if (groundX <= -CANVAS_WIDTH) {
+            groundX = 0;
         }
     }
 
-    if (gameState !== GameState.PLAYING) return;
+    if (gameState !== GAME_STATE.PLAYING) return;
         
-    velocity += gravity * delta
+    velocity += GRAVITY * delta
     player.y += velocity * delta
 
     pipes.forEach(pipe => {
-        pipe.x -= pipe_speed * delta;
+        pipe.x -= PIPE_SPEED * delta;
     });
 
     pipes = pipes.filter(pipe => pipe.x + pipe.width > 0);
 
     pipeTimer += delta;
-    if (pipeTimer > pipe_interval) {
+    if (pipeTimer > PIPE_INTERVAL) {
         pipeTimer = 0;
         spawnPipe();
     }
@@ -168,18 +224,18 @@ function draw() {
     drawScore();
     drawGround();
 
-    if (gameState === GameState.GAME_OVER) {
+    if (gameState === GAME_STATE.GAME_OVER) {
         drawGameOver();
     }
 
-    if (gameState === GameState.START) {
+    if (gameState === GAME_STATE.START) {
         drawStartText();
     }
 }
 
 function drawGround() {
-    ctx.drawImage(ground, ground_x, ground_y, canvas.width, ground_height);
-    ctx.drawImage(ground, ground_x + canvas.width, ground_y, canvas.width, ground_height);
+    ctx.drawImage(ground, groundX, GROUND_Y, canvas.width, GROUND_HEIGHT);
+    ctx.drawImage(ground, groundX + canvas.width, GROUND_Y, canvas.width, GROUND_HEIGHT);
 }
 
 
@@ -188,7 +244,7 @@ function drawPlayer() {
     ctx.translate(player.x + player.width / 2, player.y + player.height / 2);
 
     ctx.drawImage(
-        player_img,
+        playerImg,
         -player.width / 2,
         -player.height / 2,
         player.width,
@@ -202,19 +258,19 @@ function drawPlayer() {
 function drawPipes() {
     pipes.forEach(pipe => {
         ctx.drawImage(
-            pipe_top,
+            pipeTop,
             pipe.x,
-            pipe.height - pipe_top.height,
+            pipe.height - pipeTop.height,
             pipe.width,
-            pipe_top.height
+            pipeTop.height
         );
 
         ctx.drawImage(
-            pipe_bottom,
+            pipeBottom,
             pipe.x,
             pipe.bottomY,
             pipe.width,
-            pipe_bottom.height
+            pipeBottom.height
         );
     });
 }
@@ -234,18 +290,18 @@ function drawStartText() {
     ctx.font = "bold 50px AntonSC";
     ctx.textAlign = "center";
     ctx.fillText("TAP", canvas.width / 2 + 35, canvas.height / 2 + 30);
-    
-    const pointerWidth = 61;
-    const pointerHeight = 75;
+
+    const POINTER_WIDTH = 61;
+    const POINTER_HEIGHT = 75;
 
     ctx.save();
     ctx.globalAlpha = 0.7;
     ctx.drawImage(
         pointer,
-        canvas.width / 2 - pointerWidth / 2 - 25,
+        canvas.width / 2 - POINTER_WIDTH / 2 - 25,
         canvas.height / 2 + 50,
-        pointerWidth,
-        pointerHeight
+        POINTER_WIDTH,
+        POINTER_HEIGHT
     );
     ctx.restore();
 }
@@ -272,14 +328,14 @@ function drawGameOver() {
 function spawnPipe() {
     const getRandomInt = (min, max) => Math.floor(Math.random() * (max - min)) + min;
     
-    let topHeight = getRandomInt(50, ground_y - pipe_gap - 50);
-    let bottomY = topHeight + pipe_gap;
+    let topHeight = getRandomInt(50, GROUND_Y - PIPE_GAP - 50);
+    let bottomY = topHeight + PIPE_GAP;
     let bottomHeight = canvas.height - bottomY;
 
     pipes.push({
         x: canvas.width,
         y: 0,
-        width: pipe_width,
+        width: PIPE_WIDTH,
         height: topHeight,
         bottomY: bottomY,
         bottomHeight: bottomHeight,
@@ -289,8 +345,8 @@ function spawnPipe() {
 
 
 function checkCollision() {
-    if (player.y + player.height >= ground_y || player.y <= 0) {
-        gameState = GameState.GAME_OVER;
+    if (player.y + player.height >= GROUND_Y || player.y <= 0) {
+        gameState = GAME_STATE.GAME_OVER;
         return;
     }
 
@@ -304,7 +360,7 @@ function checkCollision() {
                           player.y + player.height > pipe.bottomY;
 
         if (hitTop || hitBottom) {
-            gameState = GameState.GAME_OVER;
+            gameState = GAME_STATE.GAME_OVER;
             return;
         }
     }
@@ -312,20 +368,20 @@ function checkCollision() {
 
 
 function startGame() {
-    gameState = GameState.PLAYING;
+    gameState = GAME_STATE.PLAYING;
     velocity = -350;
 }
 
 
 function resetGame() {
-    player.y = player_y;
+    player.y = PLAYER_Y;
     velocity = 0;
     pipes = [];
     score = 0;
     pipeTimer = 0;
     canFlap = true;
     lastTime = performance.now();
-    gameState = GameState.START;
+    gameState = GAME_STATE.START;
 }
 
 
