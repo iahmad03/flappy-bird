@@ -9,13 +9,17 @@ const CANVAS_HEIGHT = 800;
 // ASSETS
 // ============================================
 const font = new FontFace('AntonSC', 'url(assets/fonts/AntonSC-Regular.ttf)');
+let jumpSound = new Audio("assets/sounds/jump.wav");
+let scoreSound = new Audio("assets/sounds/score.wav");
+let scoreSound2 = new Audio("assets/sounds/score2.wav");
+let hitSound = new Audio("assets/sounds/hit.wav");
 let bg, ground, playerImg, pipeTop, pipeBottom, pointer;
 
 // ============================================
 // PLAYER
 // ============================================
-const PLAYER_X = 100;
-const PLAYER_Y = 280;
+const PLAYER_X = 100;      // starting x position
+const PLAYER_Y = 280;      // starting y position
 const PLAYER_WIDTH = 64;
 const PLAYER_HEIGHT = 44;
 
@@ -29,14 +33,19 @@ let player = {
 let velocity = 0;
 let GRAVITY = 950;
 
+let playerRotation = 0;
+let spinning = false; 
+const SPIN_DURATION = 0.8; 
+let spinTimer = 0;
+
 // ============================================
 // PIPES
 // ============================================
 let pipes = [];
 const PIPE_WIDTH = 110;
-const PIPE_GAP = 180;
-const PIPE_SPEED = 180;
-const PIPE_INTERVAL = 2;
+const PIPE_GAP = 180;      // gap between top and bottom pipes (px)
+const PIPE_SPEED = 180;    // horizontal speed of pipes (px per second)
+const PIPE_INTERVAL = 2;   // time between pipe spawns (seconds)
 let pipeTimer = 0;
 
 // ============================================
@@ -62,10 +71,19 @@ let score = 0;
 // ============================================
 // INPUT
 // ============================================
-let canFlap = true;
-let inputLocked = false;
+let canFlap = true;        // prevents holding down space
+let inputLocked = false;   // prevent input during state transitions
+const JUMP_VELOCITY = -350;
+
+// ============================================
+// GAME LOOP
+// ============================================
 let lastTime = 0;
 
+// SHAKE EFFECT
+let shakeTimer = 0;
+const SHAKE_DURATION = 0.1;
+const SHAKE_INTENSITY = 8;
 
 function loadImage(src) {
     return new Promise((resolve, reject) => {
@@ -93,6 +111,34 @@ async function preloadImages() {
     );
 
     return Object.fromEntries(loadedEntries);
+}
+
+
+function handleInput(source) {
+    if (inputLocked) return;
+
+    if (gameState === GAME_STATE.START) {
+        inputLocked = true;
+        startGame();
+        return;
+    }
+
+    if (gameState === GAME_STATE.GAME_OVER) {
+        inputLocked = true;
+        resetGame();
+        return;
+    }
+
+    if (gameState === GAME_STATE.PLAYING) {
+        if (source === "keyboard") {
+            if (!canFlap) return;
+            canFlap = false;
+        }
+
+        velocity = JUMP_VELOCITY;
+        jumpSound.currentTime = 0;
+        jumpSound.play();
+    }
 }
 
 window.onload = async function() {
@@ -141,31 +187,6 @@ window.onload = async function() {
     requestAnimationFrame(gameLoop);
 }
 
-function handleInput(source) {
-    if (inputLocked) return;
-
-    if (gameState === GAME_STATE.START) {
-        inputLocked = true;
-        startGame();
-        return;
-    }
-
-    if (gameState === GAME_STATE.GAME_OVER) {
-        inputLocked = true;
-        resetGame();
-        return;
-    }
-
-    if (gameState === GAME_STATE.PLAYING) {
-        if (source === "keyboard") {
-            if (!canFlap) return;
-            canFlap = false;
-        }
-
-        velocity = -350;
-    }
-}
-
 
 function gameLoop(timestamp) {
     inputLocked = false;
@@ -188,15 +209,17 @@ function update(delta) {
         }
     }
 
+    if (shakeTimer > 0) {
+        shakeTimer -= delta;
+        if (shakeTimer < 0) shakeTimer = 0;
+    }
+
     if (gameState !== GAME_STATE.PLAYING) return;
         
     velocity += GRAVITY * delta
     player.y += velocity * delta
 
-    pipes.forEach(pipe => {
-        pipe.x -= PIPE_SPEED * delta;
-    });
-
+    pipes.forEach(pipe => {pipe.x -= PIPE_SPEED * delta;});
     pipes = pipes.filter(pipe => pipe.x + pipe.width > 0);
 
     pipeTimer += delta;
@@ -213,10 +236,27 @@ function update(delta) {
     });
 
     checkCollision();
+
+    if (spinning) {
+        spinTimer += delta;
+        playerRotation = (spinTimer / SPIN_DURATION) * Math.PI * 2;
+
+        if (spinTimer >= SPIN_DURATION) {
+            spinning = false;
+            playerRotation = 0;
+        }
+    }
 }
 
 
 function draw() {
+    ctx.save();
+    if (shakeTimer > 0) {
+        const offsetX = (Math.random() - 0.5) * SHAKE_INTENSITY;
+        const offsetY = (Math.random() - 0.5) * SHAKE_INTENSITY;
+        ctx.translate(offsetX, offsetY);
+    }
+
     ctx.drawImage(bg, 0, 0, canvas.width, canvas.height);
 
     drawPlayer();
@@ -224,13 +264,10 @@ function draw() {
     drawScore();
     drawGround();
 
-    if (gameState === GAME_STATE.GAME_OVER) {
-        drawGameOver();
-    }
+    if (gameState === GAME_STATE.GAME_OVER) drawGameOver();
+    if (gameState === GAME_STATE.START) drawStartText();
 
-    if (gameState === GAME_STATE.START) {
-        drawStartText();
-    }
+    ctx.restore();
 }
 
 function drawGround() {
@@ -242,6 +279,8 @@ function drawGround() {
 function drawPlayer() {
     ctx.save();
     ctx.translate(player.x + player.width / 2, player.y + player.height / 2);
+
+    ctx.rotate(playerRotation);
 
     ctx.drawImage(
         playerImg,
@@ -275,21 +314,42 @@ function drawPipes() {
     });
 }
 
+function drawText(text, x, y, options = {}) {
+    const {
+        font = "bold 50px AntonSC",
+        color = "rgba(0, 0, 0, 0.7)",
+        align = "center",
+        baseline = "top",
+        alpha = 1
+    } = options;
+
+    ctx.save();
+    ctx.font = font;
+    ctx.fillStyle = color;
+    ctx.textAlign = align;
+    ctx.textBaseline = baseline;
+    ctx.globalAlpha = alpha;
+    ctx.fillText(text, x, y);
+    ctx.restore();
+}
+
 
 function drawScore() {
-    ctx.font = "bold 50px AntonSC";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "top";
-    ctx.fillStyle = "rgba(0, 0, 0, 0.7)";
-    ctx.fillText(score, canvas.width / 2, 25);
+    drawText(
+        score, 
+        canvas.width / 2, 25, 
+        { baseline: "top" }
+    );
 }
 
 
 function drawStartText() {
-    ctx.fillStyle = "rgba(0, 0, 0, 0.7)";
-    ctx.font = "bold 50px AntonSC";
-    ctx.textAlign = "center";
-    ctx.fillText("TAP", canvas.width / 2 + 35, canvas.height / 2 + 30);
+    drawText(
+        "TAP", 
+        canvas.width / 2 + 35, 
+        canvas.height / 2 + 30, 
+        { baseline: "middle" }
+    );
 
     const POINTER_WIDTH = 61;
     const POINTER_HEIGHT = 75;
@@ -311,17 +371,18 @@ function drawGameOver() {
     ctx.fillStyle = "rgba(0, 0, 0, 0.3)";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    ctx.font = "bold 120px AntonSC";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillStyle = "rgba(0, 0, 0, 0.7)";
-    ctx.fillText("GAME OVER", canvas.width / 2, canvas.height / 2 - 40);
-
-    ctx.font = "40px AntonSC";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillStyle = "rgba(0, 0, 0, 0.7)";
-    ctx.fillText("TAP TO PLAY AGAIN", canvas.width / 2, canvas.height / 2 + 40);
+    drawText(
+        "GAME OVER", 
+        canvas.width / 2, 
+        canvas.height / 2 - 40, 
+        { font: "bold 120px AntonSC", baseline: "middle" }
+    );
+    drawText(
+        "TAP TO PLAY AGAIN", 
+        canvas.width / 2, 
+        canvas.height / 2 + 40, 
+        { font: "40px AntonSC", baseline: "middle" }
+    );
 }
 
 
@@ -345,9 +406,10 @@ function spawnPipe() {
 
 
 function checkCollision() {
+    let collided = false;
+
     if (player.y + player.height >= GROUND_Y || player.y <= 0) {
-        gameState = GAME_STATE.GAME_OVER;
-        return;
+        collided = true;
     }
 
     for (let pipe of pipes) {
@@ -360,16 +422,23 @@ function checkCollision() {
                           player.y + player.height > pipe.bottomY;
 
         if (hitTop || hitBottom) {
-            gameState = GAME_STATE.GAME_OVER;
-            return;
+            collided = true;
+            break;
         }
+    }
+    
+    if (collided) {
+        hitSound.currentTime = 0;
+        hitSound.play();
+        shakeTimer = SHAKE_DURATION;
+        gameState = GAME_STATE.GAME_OVER;
     }
 }
 
 
 function startGame() {
     gameState = GAME_STATE.PLAYING;
-    velocity = -350;
+    velocity = JUMP_VELOCITY;
 }
 
 
@@ -387,4 +456,13 @@ function resetGame() {
 
 function incrementScore() {
     score++;
+
+    scoreSound.currentTime = 0;
+    scoreSound.play();
+
+    if (score % 10 === 0) {
+        spinning = true;
+        spinTimer = 0;
+        scoreSound2.play();
+    }
 }
