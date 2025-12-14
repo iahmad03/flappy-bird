@@ -1,24 +1,30 @@
 let canvas, ctx;
-let canvas_width = 400;
-let canvas_height = 600;
+let canvas_width = 600;
+let canvas_height = 800;
 
 const font = new FontFace('AntonSC', 'url(assets/fonts/AntonSC-Regular.ttf)');
 const bg = new Image();
+const ground = new Image();
+const pointer = new Image();
+const player_img = new Image();
 const pipe_top = new Image();
 const pipe_bottom = new Image();
 bg.src = "assets/images/background.png";
+ground.src = "assets/images/ground.png";
+pointer.src = "assets/images/pointer.png";
+player_img.src = "assets/images/player.png";
 pipe_top.src = "assets/images/pipe-top.png";
 pipe_bottom.src = "assets/images/pipe-bottom.png";
 
 let player_x = 100;
 let player_y = 280;
-let player_width = 34;
-let player_height = 24;
+let player_width = 64;
+let player_height = 44;
 let velocity = 0;
 let gravity = 950;
 
 let pipes = [];
-const pipe_width = 80;
+const pipe_width = 100;
 const pipe_gap = 180;
 const pipe_speed = 180;
 const pipe_interval = 1.8;
@@ -31,20 +37,19 @@ let player = {
     height: player_height
 }
 
+let canFlap = true;
 let lastTime = 0;
 let score = 0;
+
+const ground_height = 80;
+const ground_y = canvas_height - ground_height;
+let ground_x = 0;
+let ground_speed = pipe_speed;
 
 const GameState = {
     START: "start",
     PLAYING: "playing",
     GAME_OVER: "game_over"
-};
-
-const playButton = {
-    x: canvas_width / 2 - 90,
-    y: canvas_height / 2 + 40,
-    width: 180,
-    height: 50
 };
 
 let gameState = GameState.START;
@@ -55,10 +60,17 @@ window.onload = function() {
     canvas.height = canvas_height;
     ctx = canvas.getContext("2d");
 
-    window.addEventListener("keydown", handleInput);
-    canvas.addEventListener("mousedown", handleCanvasInput);
-    canvas.addEventListener("touchstart", handleCanvasInput);
     canvas.addEventListener("contextmenu", e => e.preventDefault());
+    canvas.addEventListener("mousedown", () => handleInput("pointer"));
+    canvas.addEventListener("touchstart", () => handleInput("pointer"));
+
+    window.addEventListener("keydown", e => {
+        if (e.code === "Space") handleInput("keyboard");
+    });
+
+    window.addEventListener("keyup", e => {
+        if (e.code === "Space") canFlap = true;
+    });
 
     window.addEventListener("wheel", e => {
         if (e.ctrlKey) {
@@ -79,38 +91,24 @@ window.onload = function() {
     });
 }
 
-function handleInput(e) {
-    if (e.code !== "Space") return;
-
-    if (gameState === GameState.START) startGame();
-    else if (gameState === GameState.PLAYING) velocity = -350;
-}
-
-
-function handleCanvasInput(e) {
-    const rect = canvas.getBoundingClientRect();
-    const x = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
-    const y = (e.touches ? e.touches[0].clientY : e.clientY) - rect.top;
-
+function handleInput(source) {
     if (gameState === GameState.START) {
         startGame();
         return;
     }
 
-    if (gameState === GameState.PLAYING) {
-        velocity = -350;
+    if (gameState === GameState.GAME_OVER) {
+        resetGame();
         return;
     }
 
-    if (gameState === GameState.GAME_OVER) {
-        if (
-            x >= playButton.x &&
-            x <= playButton.x + playButton.width &&
-            y >= playButton.y &&
-            y <= playButton.y + playButton.height
-        ) {
-            resetGame();
+    if (gameState === GameState.PLAYING) {
+        if (source === "keyboard") {
+            if (!canFlap) return;
+            canFlap = false;
         }
+
+        velocity = -350;
     }
 }
 
@@ -127,8 +125,15 @@ function gameLoop(timestamp) {
 
 
 function update(delta) {
-    if (gameState !== GameState.PLAYING) return;
+    if (gameState !== GameState.GAME_OVER) {
+        ground_x -= ground_speed * delta;
+        if (ground_x <= -canvas_width) {
+            ground_x = 0;
+        }
+    }
 
+    if (gameState !== GameState.PLAYING) return;
+        
     velocity += gravity * delta
     player.y += velocity * delta
 
@@ -161,10 +166,10 @@ function draw() {
     drawPlayer();
     drawPipes();
     drawScore();
+    drawGround();
 
     if (gameState === GameState.GAME_OVER) {
         drawGameOver();
-        drawPlayButton();
     }
 
     if (gameState === GameState.START) {
@@ -172,10 +177,25 @@ function draw() {
     }
 }
 
+function drawGround() {
+    ctx.drawImage(ground, ground_x, ground_y, canvas.width, ground_height);
+    ctx.drawImage(ground, ground_x + canvas.width, ground_y, canvas.width, ground_height);
+}
+
 
 function drawPlayer() {
-    ctx.fillStyle = "white";
-    ctx.fillRect(player.x, player.y, player.width, player.height);
+    ctx.save();
+    ctx.translate(player.x + player.width / 2, player.y + player.height / 2);
+
+    ctx.drawImage(
+        player_img,
+        -player.width / 2,
+        -player.height / 2,
+        player.width,
+        player.height
+    );
+
+    ctx.restore();
 }
 
 
@@ -201,67 +221,58 @@ function drawPipes() {
 
 
 function drawScore() {
-    ctx.font = "bold 40px AntonSC";
+    ctx.font = "bold 50px AntonSC";
     ctx.textAlign = "center";
     ctx.textBaseline = "top";
-    ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
-    ctx.fillText(score, canvas.width / 2, 15);
+    ctx.fillStyle = "rgba(0, 0, 0, 0.7)";
+    ctx.fillText(score, canvas.width / 2, 25);
 }
 
 
 function drawStartText() {
-    ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
+    ctx.fillStyle = "rgba(0, 0, 0, 0.7)";
     ctx.font = "bold 50px AntonSC";
     ctx.textAlign = "center";
-    ctx.fillText("TAP", canvas.width / 1.8, canvas.height / 1.8);
+    ctx.fillText("TAP", canvas.width / 2 + 35, canvas.height / 2 + 30);
     
-    ctx.fillStyle = "white";
-    ctx.font = "60px AntonSC";
-    ctx.textAlign = "center";
-    ctx.fillText("👆 ", canvas.width / 2.2, canvas.height / 1.6);
+    const pointerWidth = 61;
+    const pointerHeight = 75;
+
+    ctx.save();
+    ctx.globalAlpha = 0.7;
+    ctx.drawImage(
+        pointer,
+        canvas.width / 2 - pointerWidth / 2 - 25,
+        canvas.height / 2 + 50,
+        pointerWidth,
+        pointerHeight
+    );
+    ctx.restore();
 }
 
 
 function drawGameOver() {
-    ctx.fillStyle = "rgba(0, 0, 0, 0.2)";
+    ctx.fillStyle = "rgba(0, 0, 0, 0.3)";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    ctx.font = "bold 70px AntonSC";
+    ctx.font = "bold 120px AntonSC";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
-    ctx.fillText("GAME OVER", canvas.width / 2, canvas.height / 2.2 - 20);
-}
+    ctx.fillStyle = "rgba(0, 0, 0, 0.7)";
+    ctx.fillText("GAME OVER", canvas.width / 2, canvas.height / 2 - 40);
 
-
-function drawPlayButton() {
-    ctx.fillStyle = "white";
-    ctx.beginPath();
-    ctx.roundRect(
-        playButton.x, 
-        playButton.y, 
-        playButton.width, 
-        playButton.height, 
-        4
-    );
-    ctx.fill();
-
-    ctx.fillStyle = "black";
-    ctx.font = "24px AntonSC";
+    ctx.font = "40px AntonSC";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText(
-        "PLAY AGAIN 🔁",
-        playButton.x + playButton.width / 2,
-        playButton.y + playButton.height / 2 + 4
-    );
+    ctx.fillStyle = "rgba(0, 0, 0, 0.7)";
+    ctx.fillText("TAP TO PLAY AGAIN", canvas.width / 2, canvas.height / 2 + 40);
 }
 
 
 function spawnPipe() {
     const getRandomInt = (min, max) => Math.floor(Math.random() * (max - min)) + min;
     
-    let topHeight = getRandomInt(50, canvas.height - pipe_gap - 50);
+    let topHeight = getRandomInt(50, ground_y - pipe_gap - 50);
     let bottomY = topHeight + pipe_gap;
     let bottomHeight = canvas.height - bottomY;
 
@@ -278,7 +289,7 @@ function spawnPipe() {
 
 
 function checkCollision() {
-    if (player.y + player.height >= canvas.height || player.y <= 0) {
+    if (player.y + player.height >= ground_y || player.y <= 0) {
         gameState = GameState.GAME_OVER;
         return;
     }
@@ -312,6 +323,8 @@ function resetGame() {
     pipes = [];
     score = 0;
     pipeTimer = 0;
+    canFlap = true;
+    lastTime = performance.now();
     gameState = GameState.START;
 }
 

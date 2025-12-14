@@ -26,16 +26,8 @@ body {
 }
 
 #game-wrapper {
-	width: 400px;
-	height: 600px;
 	overflow: hidden;
 	z-index: 1;
 	position: relative;
-	border: 8px solid #8400ff2a;
 	border-radius: 8px;
-}
-
-#gameCanvas {
-	width: 400px;
-	height: 600px;
 }
